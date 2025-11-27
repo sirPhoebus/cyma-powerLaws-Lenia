@@ -53,3 +53,33 @@ GAUSSIAN_SIGMA = 1.0
 # Visualization
 COLORMAP = "viridis"
 FPS_TARGET = 30
+
+# =============================================================================
+# Phase 2: Wave Dynamics Parameters
+# =============================================================================
+
+# Wave Equation Parameters
+WAVE_SPEED = 1.0              # c - wave propagation speed
+WAVE_DAMPING = 0.01           # gamma - damping coefficient
+WAVE_DENSITY = 1.0            # rho - medium density
+
+# Chladni Plate Parameters
+PLATE_THICKNESS = 0.01        # h - plate thickness
+YOUNGS_MODULUS = 1.0          # E - Young's modulus
+POISSON_RATIO = 0.3           # nu - Poisson ratio
+FLEXURAL_RIGIDITY = YOUNGS_MODULUS * PLATE_THICKNESS**3 / (12 * (1 - POISSON_RATIO**2))
+
+# Time Integration for Waves
+WAVE_DT = 0.1                 # Smaller timestep for wave stability (CFL condition)
+WAVE_TIMESTEPPER = "leapfrog" # Options: leapfrog, rk4, symplectic
+
+# Boundary Conditions for Waves
+BOUNDARY_PML = "pml"          # Perfectly Matched Layer
+PML_THICKNESS = 20            # Number of cells for PML absorption
+PML_SIGMA_MAX = 1.0           # Maximum absorption coefficient
+
+# Stencil Orders for Finite Differences
+STENCIL_ORDER_2 = 2
+STENCIL_ORDER_4 = 4
+STENCIL_ORDER_6 = 6
+DEFAULT_STENCIL_ORDER = STENCIL_ORDER_2

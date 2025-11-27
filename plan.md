@@ -93,13 +93,98 @@ This layer handles **wave propagation, interference, and standing wave formation
 - A wave is defined by its source function (where/when/how energy is injected)
 - Propagation is emergent from the field equation, not coded separately
 
-### 2.2 Interference Mechanics
+### 2.2 Wave Equation Core
+
+Implement the damped wave equation as the primary propagation model:
+
+```
+WaveEquation:
+  - form: d2u/dt2 = c^2 * Laplacian(u) - gamma * du/dt + F(x,t)
+  - c: Wave speed (spatially variable for metamaterial effects)
+  - gamma: Damping coefficient (controls energy dissipation)
+  - F(x,t): Driving force function (source injection)
+```
+
+| Parameter | Physical Meaning |
+|-----------|------------------|
+| `c(x)` | Local wave velocity (material property) |
+| `gamma(x)` | Local damping (boundary absorption) |
+| `rho(x)` | Density distribution (affects modal frequencies) |
+
+### 2.3 Chladni Plate Dynamics
+
+Implement the biharmonic plate equation for 2D membrane simulations:
+
+```
+PlateEquation:
+  - form: rho * h * d2w/dt2 = -D * Laplacian(Laplacian(w)) + F(x,t)
+  - D: Flexural rigidity = E * h^3 / (12 * (1 - nu^2))
+  - E: Young's modulus
+  - h: Plate thickness
+  - nu: Poisson ratio
+```
+
+Modal frequency formula (generalized Chladni's Law):
+
+```
+f_mn = (pi / 2) * sqrt(D / (rho * h)) * ((m/L_x)^2 + (n/L_y)^2)
+```
+
+Extend to N-dimensions via eigenvalue decomposition of the N-dim Laplacian.
+
+### 2.4 3D Volume Wave Propagation
+
+Port concepts from real-time 3D cymatics (Cymatic3D approach):
+
+```
+VolumeWaveConfig:
+  - grid_resolution: (nx, ny, nz) voxel dimensions
+  - boundary_type: ABSORBING | REFLECTING | PERIODIC | MIXED
+  - stencil_order: 2 | 4 | 6 (finite difference accuracy)
+  - timestepper: LEAPFROG | RK4 | SYMPLECTIC
+```
+
+3D Laplacian stencil (6th order accuracy):
+
+```
+Laplacian_3D(u) = sum over axes [
+  (1/90)*u[-3] - (3/20)*u[-2] + (3/2)*u[-1] - (49/18)*u[0] + ...
+] / dx^2
+```
+
+### 2.5 Interference Mechanics
 
 - **Constructive interference**: `field(x) = wave_a(x) + wave_b(x)` where phases align
 - **Destructive interference**: Automatic where phases oppose
 - **Standing waves**: Emerge when boundary conditions trap energy
 
-### 2.3 Resonance Detection
+Phase coherence metric:
+
+```
+coherence(w1, w2) = |<exp(i * (phase(w1) - phase(w2)))>|
+```
+
+### 2.6 Additive Synthesis Engine
+
+Implement progressive wave construction (from additive cymatics concepts):
+
+```
+AdditiveSynthesis:
+  - base_frequency: f0
+  - harmonic_series: [(n, amplitude_n, phase_n) for n in 1..N]
+  - envelope: ADSR(attack, decay, sustain, release)
+  - spatial_mode: RADIAL | CARTESIAN | ANGULAR
+```
+
+Time-varying superposition:
+
+```
+u(x, t) = sum_n [ A_n(t) * sin(2*pi*n*f0*t + phi_n) * mode_n(x) ]
+```
+
+Where `mode_n(x)` is the nth spatial eigenfunction of the domain.
+
+### 2.7 Resonance Detection
 
 Build analyzers that can identify:
 
@@ -107,6 +192,85 @@ Build analyzers that can identify:
 - **Antinodes**: Regions of maximal oscillation
 - **Modal patterns**: The eigenfunctions of the bounded system
 - **Stability metrics**: Is a pattern growing, decaying, or stable?
+
+Resonance analyzer pipeline:
+
+| Stage | Operation |
+|-------|-----------|
+| `temporal_fft(field, window)` | Extract frequency content over time window |
+| `spatial_fft(field)` | Extract spatial wavenumber content |
+| `peak_detect(spectrum, threshold)` | Find resonant frequencies |
+| `mode_extract(field, frequency)` | Isolate spatial pattern at frequency |
+| `stability_measure(mode, dt)` | Track amplitude evolution |
+
+### 2.8 Boundary Condition Framework
+
+```
+BoundaryConfig:
+  - type: DIRICHLET | NEUMANN | ROBIN | ABSORBING_PML
+  - value_fn: Function defining boundary values
+  - pml_thickness: Layers for perfectly matched layer absorption
+  - reflection_coeff: For partial reflection boundaries
+```
+
+Perfectly Matched Layer (PML) for open boundaries:
+
+```
+sigma(x) = sigma_max * ((x - x_boundary) / pml_thickness)^n
+```
+
+### 2.9 3D Isosurface Extraction
+
+For volumetric visualization of standing wave patterns:
+
+```
+IsosurfaceConfig:
+  - threshold_values: List of iso-levels to extract
+  - algorithm: MARCHING_CUBES | DUAL_CONTOURING
+  - smoothing_iterations: Post-extraction mesh smoothing
+  - color_map: Map field values to surface colors
+```
+
+Node surface extraction: `isosurface(|u|^2, threshold=epsilon)` yields nodal boundaries.
+
+### 2.10 Wave Source Primitives
+
+| Source Type | Mathematical Form |
+|-------------|-------------------|
+| `point_oscillator(x0, f, A)` | `A * sin(2*pi*f*t) * delta(x - x0)` |
+| `line_driver(x1, x2, f, A)` | Uniform oscillation along line segment |
+| `ring_source(center, radius, f, A)` | Circular wave emitter |
+| `boundary_bow(edge, f, profile)` | Edge excitation (Chladni bow simulation) |
+| `volume_pulse(region, envelope)` | Impulse within 3D region |
+
+### 2.11 Phase Space Tracking
+
+Track system state in phase space for dynamical analysis:
+
+```
+PhaseSpaceState:
+  - field_snapshot: u(x)
+  - velocity_snapshot: du/dt(x)
+  - total_energy: E = 0.5 * integral(rho * (du/dt)^2 + c^2 * |grad(u)|^2)
+  - modal_amplitudes: Projection onto eigenmodes
+```
+
+### 2.12 Integration with Phase 1 Field
+
+The wave engine operates on top of the ResonantField:
+
+```
+field_next = field + dt * (
+    diffusion_term(field) +
+    reaction_term(field) +
+    wave_acceleration_term(field, velocity) +
+    injection_term(sources)
+)
+
+velocity_next = velocity + dt * wave_acceleration_term(field, velocity)
+```
+
+This couples wave dynamics with reaction-diffusion, enabling cymatics-RD hybrid patterns.
 
 ---
 
