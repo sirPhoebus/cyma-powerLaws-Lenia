@@ -13,4 +13,8 @@ from src.simulation import Simulation
 # N-Dimensional modules (Phase 1)
 from src.field_nd import ResonantFieldND, ResonantField2D, ResonantField3D
 from src.kernel_nd import KernelND
-from src.simulation_nd import SimulationND
+from src.simulation_nd import (
+    SimulationND, 
+    compute_dimensional_scale, 
+    scale_diffusion_coefficients
+)

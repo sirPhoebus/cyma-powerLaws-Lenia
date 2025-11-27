@@ -81,6 +81,12 @@ def test_kernel_nd():
     print(f"3D Mexican Hat: shape={mex_3d.shape}")
     print(f"  Sum: {np.sum(mex_3d.data):.6f} (should be ~0)")
     
+    # Power-Law Kernel (scale-free / fractal interactions)
+    power_2d = KernelND.power_law(alpha=2.0, ndim=2, radius=8)
+    print(f"\n2D Power-Law (alpha=2): shape={power_2d.shape}")
+    print(f"  Sum: {np.sum(power_2d.data):.6f} (should be 1)")
+    print(f"  Center: {power_2d.data[8,8]:.6f} (should be 0)")
+    
     print("N-Dimensional Kernel tests PASSED\n")
     return lap_3d
 
@@ -193,19 +199,15 @@ def run_3d_simulation():
         field.inject_seed_sphere(center=(z, y, x), radius=4, channel=0, value=0.45)
     
     # 3D requires adjusted parameters due to dimensional scaling
-    # Laplacian center is -6 in 3D vs -4 in 2D (1.5x stronger diffusion)
-    # Compensate by reducing diffusion coefficients
+    # Now handled automatically via auto_scale_diffusion=True
     gs = GrayScott(feed_rate=0.055, kill_rate=0.062)
-    sim = SimulationND(field, gs, dt=1.0)
+    sim = SimulationND(field, gs, dt=1.0, auto_scale_diffusion=True)
     
-    # Scale diffusion by 2D/3D ratio = 4/6 = 0.667
-    dimensional_scale = 4.0 / 6.0
-    d_u_3d = 0.16 * dimensional_scale
-    d_v_3d = 0.08 * dimensional_scale
-    sim.set_diffusion_coefficients([d_u_3d, d_v_3d])
-    
-    print(f"Dimensional scaling: {dimensional_scale:.3f}")
-    print(f"Adjusted diffusion: D_u={d_u_3d:.4f}, D_v={d_v_3d:.4f}")
+    # Report the auto-scaled values
+    from src.simulation_nd import compute_dimensional_scale
+    scale = compute_dimensional_scale(field.ndim)
+    print(f"Auto dimensional scaling: {scale:.3f} (2D/{field.ndim}D)")
+    print(f"Scaled diffusion: D_u={sim.diffusion_coefficients[0]:.4f}, D_v={sim.diffusion_coefficients[1]:.4f}")
     print("Running 1000 steps (3D is computationally intensive)...")
     sim.run(1000)
     

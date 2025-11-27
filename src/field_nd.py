@@ -6,7 +6,8 @@ from scipy import ndimage
 from src.config import (
     FIELD_DIMENSIONS, FIELD_CHANNELS,
     DTYPE, DEFAULT_BOUNDARY,
-    BOUNDARY_PERIODIC, BOUNDARY_NEUMANN
+    BOUNDARY_PERIODIC, BOUNDARY_NEUMANN, BOUNDARY_DIRICHLET, 
+    BOUNDARY_ABSORBING, DIRICHLET_VALUE
 )
 
 
@@ -153,10 +154,9 @@ class ResonantFieldND:
             # Periodic handled implicitly by FFT convolutions
             pass
         elif self.boundary == BOUNDARY_NEUMANN:
-            # Zero-flux: each face equals adjacent interior
+            # Zero-flux (reflective): each face equals adjacent interior
             for c in range(self.channels):
                 for axis in range(self.ndim):
-                    # Create slices for the boundary faces
                     slice_first = [slice(None)] * (self.ndim + 1)
                     slice_second = [slice(None)] * (self.ndim + 1)
                     slice_first[axis + 1] = 0
@@ -166,6 +166,16 @@ class ResonantFieldND:
                     slice_first[axis + 1] = -1
                     slice_second[axis + 1] = -2
                     self.data[tuple(slice_first)] = self.data[tuple(slice_second)]
+        elif self.boundary in (BOUNDARY_DIRICHLET, BOUNDARY_ABSORBING):
+            # Fixed value (absorbing): boundaries set to constant
+            for c in range(self.channels):
+                for axis in range(self.ndim):
+                    slice_first = [slice(None)] * (self.ndim + 1)
+                    slice_last = [slice(None)] * (self.ndim + 1)
+                    slice_first[axis + 1] = 0
+                    slice_last[axis + 1] = -1
+                    self.data[tuple(slice_first)] = DIRICHLET_VALUE
+                    self.data[tuple(slice_last)] = DIRICHLET_VALUE
     
     def get_channel(self, channel):
         """Return a specific channel of the field."""
@@ -270,6 +280,157 @@ class ResonantFieldND:
         new_field.total_energy = self.total_energy
         new_field.energy_history = self.energy_history.copy()
         return new_field
+    
+    # =========================================================================
+    # CORE OPERATIONS (Phase 1.2)
+    # =========================================================================
+    
+    def superpose(self, other, weight_self=1.0, weight_other=1.0):
+        """
+        Wave superposition: combine two fields linearly.
+        
+        result = weight_self * self + weight_other * other
+        
+        Args:
+            other: Another ResonantFieldND with same dimensions
+            weight_self: Weight for this field
+            weight_other: Weight for other field
+            
+        Returns:
+            New ResonantFieldND with superposed values
+        """
+        if self.dimensions != other.dimensions:
+            raise ValueError(f"Dimension mismatch: {self.dimensions} vs {other.dimensions}")
+        if self.channels != other.channels:
+            raise ValueError(f"Channel mismatch: {self.channels} vs {other.channels}")
+        
+        result = self.copy()
+        result.data = weight_self * self.data + weight_other * other.data
+        return result
+    
+    def superpose_inplace(self, other, weight_other=1.0):
+        """
+        Add another field to this one in-place.
+        
+        self = self + weight_other * other
+        """
+        if self.dimensions != other.dimensions:
+            raise ValueError(f"Dimension mismatch: {self.dimensions} vs {other.dimensions}")
+        self.data += weight_other * other.data
+    
+    def diffuse(self, coefficients, kernel=None):
+        """
+        Apply diffusion operator: D * nabla^2(field)
+        
+        Args:
+            coefficients: List of diffusion coefficients per channel [D_u, D_v, ...]
+            kernel: Optional custom Laplacian kernel (uses default if None)
+            
+        Returns:
+            New field with diffusion applied
+        """
+        from src.kernel_nd import KernelND
+        
+        if kernel is None:
+            kernel = KernelND.laplacian(ndim=self.ndim)
+        
+        result = self.copy()
+        for c in range(self.channels):
+            laplacian = kernel.convolve(self.data[c], mode='wrap')
+            result.data[c] = coefficients[c] * laplacian
+        return result
+    
+    def measure(self, region=None, metrics=None):
+        """
+        Extract observables from the field (energy, entropy, statistics).
+        
+        Args:
+            region: Optional tuple of slices to measure a subregion.
+                    None means entire field.
+                    Example: ((10, 50), (10, 50)) for 2D subregion
+            metrics: List of metrics to compute. Default: all.
+                     Options: 'energy', 'entropy', 'mean', 'std', 'min', 'max', 'sum'
+        
+        Returns:
+            Dictionary of measurement results
+        """
+        # Extract region
+        if region is not None:
+            slices = (slice(None),) + tuple(slice(r[0], r[1]) for r in region)
+            data = self.data[slices]
+        else:
+            data = self.data
+        
+        if metrics is None:
+            metrics = ['energy', 'entropy', 'mean', 'std', 'min', 'max', 'sum']
+        
+        results = {}
+        
+        for metric in metrics:
+            if metric == 'mean':
+                results['mean'] = [np.mean(data[c]) for c in range(self.channels)]
+            elif metric == 'std':
+                results['std'] = [np.std(data[c]) for c in range(self.channels)]
+            elif metric == 'min':
+                results['min'] = [np.min(data[c]) for c in range(self.channels)]
+            elif metric == 'max':
+                results['max'] = [np.max(data[c]) for c in range(self.channels)]
+            elif metric == 'sum':
+                results['sum'] = [np.sum(data[c]) for c in range(self.channels)]
+            elif metric == 'energy':
+                energy = 0.0
+                for c in range(self.channels):
+                    energy += np.sum(data[c]**2)
+                    for axis in range(data.ndim - 1):  # -1 for channel dim
+                        grad = np.diff(data[c], axis=axis)
+                        energy += np.sum(grad**2)
+                results['energy'] = energy
+            elif metric == 'entropy':
+                # Shannon entropy (treating values as probabilities)
+                entropy_list = []
+                for c in range(self.channels):
+                    p = np.abs(data[c]) + 1e-10
+                    p = p / np.sum(p)
+                    entropy_list.append(-np.sum(p * np.log(p)))
+                results['entropy'] = entropy_list
+        
+        return results
+    
+    def convolve(self, kernel, channel=None):
+        """
+        Apply a convolution kernel to the field.
+        
+        Args:
+            kernel: KernelND instance
+            channel: Specific channel to convolve (None = all channels)
+            
+        Returns:
+            New field with convolution applied
+        """
+        result = self.copy()
+        
+        if channel is not None:
+            result.data[channel] = kernel.convolve(self.data[channel])
+        else:
+            for c in range(self.channels):
+                result.data[c] = kernel.convolve(self.data[c])
+        
+        return result
+    
+    def react(self, reaction_system):
+        """
+        Apply a reaction system to compute local dynamics.
+        
+        Args:
+            reaction_system: ReactionSystem instance (e.g., GrayScott)
+            
+        Returns:
+            Tuple of reaction terms (du, dv, ...)
+        """
+        if self.channels < 2:
+            raise ValueError("Reaction requires at least 2 channels (u, v)")
+        
+        return reaction_system.react(self.data[0], self.data[1])
     
     def __repr__(self):
         return (f"ResonantFieldND(dimensions={self.dimensions}, "

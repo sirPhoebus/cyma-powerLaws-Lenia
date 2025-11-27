@@ -18,9 +18,14 @@ DTYPE = np.float64
 DT = 1.0  # Time step
 TOTAL_STEPS = 10000
 
-# Diffusion Coefficients (Turing condition: D_V > D_U)
-D_U = 0.16  # Activator diffusion
-D_V = 0.08  # Inhibitor diffusion (note: for some models this is higher)
+# Diffusion Coefficients
+# NOTE: Gray-Scott is a SUBSTRATE-AUTOCATALYST system, not activator-inhibitor
+# u = substrate (diffuses FASTER) - gets consumed
+# v = autocatalyst (diffuses SLOWER) - forms patterns
+# This is CORRECT for Gray-Scott: D_U > D_V
+# For classic Turing (activator-inhibitor), you'd want D_inhibitor > D_activator
+D_U = 0.16  # Substrate diffusion (faster)
+D_V = 0.08  # Autocatalyst diffusion (slower, pattern-forming)
 
 # Gray-Scott Parameters
 FEED_RATE = 0.055  # F - feed rate
@@ -33,9 +38,13 @@ FHN_BETA = 0.5
 
 # Boundary Conditions
 BOUNDARY_PERIODIC = "periodic"
-BOUNDARY_NEUMANN = "neumann"
-BOUNDARY_DIRICHLET = "dirichlet"
+BOUNDARY_NEUMANN = "neumann"       # Zero-flux (reflective)
+BOUNDARY_DIRICHLET = "dirichlet"   # Fixed value (absorbing)
+BOUNDARY_ABSORBING = "absorbing"   # Alias for Dirichlet with zero
 DEFAULT_BOUNDARY = BOUNDARY_PERIODIC
+
+# Dirichlet boundary value (for absorbing boundaries)
+DIRICHLET_VALUE = 0.0
 
 # Kernel Parameters
 KERNEL_RADIUS = 1  # For discrete Laplacian

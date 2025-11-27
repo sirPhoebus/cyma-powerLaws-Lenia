@@ -8,6 +8,52 @@ from src.kernel_nd import KernelND
 from src.reaction import ReactionSystem, GrayScott
 
 
+# Dimensional Scaling Constants
+# The discrete Laplacian center weight is -2*ndim
+# To maintain consistent diffusion strength across dimensions,
+# scale coefficients by reference_dim / actual_dim
+REFERENCE_DIMENSION = 2  # 2D is our baseline
+
+
+def compute_dimensional_scale(ndim, reference_dim=REFERENCE_DIMENSION):
+    """
+    Compute scaling factor for diffusion coefficients across dimensions.
+    
+    The discrete Laplacian has center weight -2*ndim:
+    - 1D: -2
+    - 2D: -4 (reference)
+    - 3D: -6
+    - 4D: -8
+    
+    To maintain consistent effective diffusion, scale by ratio:
+    scale = (2 * reference_dim) / (2 * ndim) = reference_dim / ndim
+    
+    Args:
+        ndim: Actual number of dimensions
+        reference_dim: Reference dimension (default 2D)
+    
+    Returns:
+        Scaling factor to apply to diffusion coefficients
+    """
+    return reference_dim / ndim
+
+
+def scale_diffusion_coefficients(coefficients, ndim, reference_dim=REFERENCE_DIMENSION):
+    """
+    Scale diffusion coefficients for N-dimensional simulation.
+    
+    Args:
+        coefficients: List of base diffusion coefficients [D_u, D_v, ...]
+        ndim: Target number of dimensions
+        reference_dim: Dimension the coefficients were tuned for
+    
+    Returns:
+        Scaled coefficients list
+    """
+    scale = compute_dimensional_scale(ndim, reference_dim)
+    return [c * scale for c in coefficients]
+
+
 class SimulationND:
     """
     N-Dimensional simulation engine for reaction-diffusion dynamics.
@@ -18,7 +64,17 @@ class SimulationND:
     - ReactionSystem (local nonlinear dynamics)
     """
     
-    def __init__(self, field, reaction_system=None, dt=DT):
+    def __init__(self, field, reaction_system=None, dt=DT, auto_scale_diffusion=False):
+        """
+        Initialize N-dimensional simulation.
+        
+        Args:
+            field: ResonantFieldND instance
+            reaction_system: ReactionSystem instance (default: GrayScott)
+            dt: Time step
+            auto_scale_diffusion: If True, automatically scale diffusion
+                                  coefficients for the field's dimensionality
+        """
         self.field = field
         self.reaction = reaction_system if reaction_system else GrayScott()
         self.dt = dt
@@ -26,7 +82,13 @@ class SimulationND:
         self.time = 0.0
         
         # Diffusion coefficients per channel
-        self.diffusion_coefficients = [D_U, D_V]
+        base_coefficients = [D_U, D_V]
+        if auto_scale_diffusion:
+            self.diffusion_coefficients = scale_diffusion_coefficients(
+                base_coefficients, field.ndim
+            )
+        else:
+            self.diffusion_coefficients = base_coefficients
         
         # N-dimensional Laplacian kernel
         self.laplacian = KernelND.laplacian(ndim=field.ndim)

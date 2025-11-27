@@ -127,6 +127,44 @@ class KernelND:
         return cls(kernel)
     
     @classmethod
+    def power_law(cls, alpha, ndim=2, radius=None, cutoff=1e-6):
+        """
+        N-dimensional power-law kernel for long-range interactions.
+        
+        K(r) = 1 / r^alpha  (with cutoff at center)
+        
+        Power-law interactions are fundamental to:
+        - Scale-free networks
+        - Fractal patterns
+        - Long-range correlations in critical systems
+        
+        Args:
+            alpha: Power-law exponent (typically 1-3)
+            ndim: Number of dimensions
+            radius: Extent of kernel
+            cutoff: Minimum value to avoid singularity at r=0
+        """
+        if radius is None:
+            radius = 10
+        
+        size = 2 * radius + 1
+        
+        coords = [np.arange(size) - radius for _ in range(ndim)]
+        grids = np.meshgrid(*coords, indexing='ij')
+        
+        r = np.sqrt(sum(g**2 for g in grids))
+        r = np.maximum(r, cutoff)  # Avoid division by zero
+        
+        kernel = 1.0 / (r ** alpha)
+        kernel[tuple([radius] * ndim)] = 0  # Zero at center (or set to max neighbor)
+        
+        # Normalize
+        if kernel.sum() > 0:
+            kernel /= kernel.sum()
+        
+        return cls(kernel)
+    
+    @classmethod
     def exponential_decay(cls, decay_rate, ndim=2, radius=None):
         """
         N-dimensional exponential decay kernel.
