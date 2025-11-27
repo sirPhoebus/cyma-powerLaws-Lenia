@@ -183,19 +183,29 @@ def run_3d_simulation():
     field = ResonantFieldND(dimensions=(48, 48, 48), channels=2)
     field.initialize_uniform([1.0, 0.0])
     
-    # Inject seeds in 3D space
+    # Inject seeds in 3D space - larger and stronger for 3D
     np.random.seed(42)
-    for _ in range(5):
-        x = np.random.randint(12, 36)
-        y = np.random.randint(12, 36)
-        z = np.random.randint(12, 36)
-        field.inject_seed_sphere(center=(z, y, x), radius=3, channel=1, value=0.25)
-        field.inject_seed_sphere(center=(z, y, x), radius=3, channel=0, value=0.5)
+    for _ in range(8):
+        x = np.random.randint(10, 38)
+        y = np.random.randint(10, 38)
+        z = np.random.randint(10, 38)
+        field.inject_seed_sphere(center=(z, y, x), radius=4, channel=1, value=0.35)
+        field.inject_seed_sphere(center=(z, y, x), radius=4, channel=0, value=0.45)
     
+    # 3D requires adjusted parameters due to dimensional scaling
+    # Laplacian center is -6 in 3D vs -4 in 2D (1.5x stronger diffusion)
+    # Compensate by reducing diffusion coefficients
     gs = GrayScott(feed_rate=0.055, kill_rate=0.062)
     sim = SimulationND(field, gs, dt=1.0)
-    sim.set_diffusion_coefficients([0.16, 0.08])
     
+    # Scale diffusion by 2D/3D ratio = 4/6 = 0.667
+    dimensional_scale = 4.0 / 6.0
+    d_u_3d = 0.16 * dimensional_scale
+    d_v_3d = 0.08 * dimensional_scale
+    sim.set_diffusion_coefficients([d_u_3d, d_v_3d])
+    
+    print(f"Dimensional scaling: {dimensional_scale:.3f}")
+    print(f"Adjusted diffusion: D_u={d_u_3d:.4f}, D_v={d_v_3d:.4f}")
     print("Running 1000 steps (3D is computationally intensive)...")
     sim.run(1000)
     

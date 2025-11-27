@@ -71,3 +71,5 @@ Real-time performance on massive grids
 WebGPU/Vulkan rendering
 The kernel DSL compiler
 You port the validated Python to Rust via PyO3 bindings, keeping Python as the orchestration layer.
+
+Important discovery: the same physics at different dimensions requires parameter rescaling. The characteristic wavelength scales with the Laplacian's effective strength.
